@@ -331,8 +331,8 @@ my sub flush_message {
 				my $type_line;
 				if ($filename) {
 					$type_line = (
-						"Content-Type: $picked_part->{Type}; name=\"$filename\"\n\n";
-					)
+						"Content-Type: $picked_part->{Type}; name=\"$filename\"\n\n"
+					);
 				}
 				else {
 					$type_line = "Content-Type: $picked_part->{Type}\n\n";
