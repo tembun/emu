@@ -302,7 +302,7 @@ my sub flush_message {
 				and
 				not ($picked_part->{Disposition} =~ /^inline/)
 			) {
-				$prepared_text = decode_base64($prepared_text) . "\n";
+				$prepared_text = decode("UTF-8", decode_base64($prepared_text)) . "\n";
 			}
 			
 			if ($single_part) {
