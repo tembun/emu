@@ -76,7 +76,9 @@ my %wanted_headers = (
 	# UTC convertion for UNIX mbox "From" delimiter line. and
 	# for seeing the original timezone too.
 	"Date: " => "",
-	"Cc: " => ""
+	"Cc: " => "",
+	"Message-ID: " => "",
+	"In-Reply-To: " => "",
 );
 
 # we store previous header was processed, in order to
@@ -186,6 +188,8 @@ my sub switch_to_message_or_text {
 	
 	my $date = $wanted_headers{"Date: "};
 	
+	my $msg_id = $wanted_headers{"Message-ID: "};
+	
 	# letter can easily has no "Subject" header at all.
 	my $subject;
 	if ($wanted_headers{"Subject: "} ne "") {
@@ -201,6 +205,15 @@ my sub switch_to_message_or_text {
 		$cc = prepare_header($wanted_headers{"Cc: "});
 	} else {
 		$cc = "";
+	}
+	
+	# and the very same with "In-Reply-To".
+	my $in_reply;
+	if ($wanted_headers{"In-Reply-To: "} ne "") {
+		$in_reply = prepare_header($wanted_headers{"In-Reply-To: "})
+	}
+	else {
+		$in_reply = "";
 	}
 	
 	# because of the fact "From" header (as any other headers)
@@ -219,7 +232,7 @@ my sub switch_to_message_or_text {
 	
 	my $from_line = build_from_line();
 	
-	my $headers = "$date$from$to$cc$subject";
+	my $headers = "$date$from$to$cc$subject$msg_id$in_reply";
 	
 	$letter_output .= "$from_line$headers\n";
 }
