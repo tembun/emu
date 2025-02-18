@@ -66,7 +66,7 @@ my %config = (
 #  - &addr -- a sender's mail (from who we got an email from).
 #  - &inbox -- a file where the message goes.
 #  - {...} -- inside curly braces you can specify stuff that will
-#             be sended to a program only in case mail disposition
+#             be sent to a program only in case mail disposition
 #             file differs from the default.
 sub notify {
 	my $notifier = $config{notifier};

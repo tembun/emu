@@ -25,7 +25,7 @@ my $is_daemon = $option eq "-d";
 # a variable that allows us to actually talk to IMAP server.
 my $imap;
 
-# `$HOME` variables is also used in variables substitution.
+# `$HOME` variable is also used in variables substitution.
 # (see `sub_vars` function).
 my $HOME = $ENV{HOME};
 my $config_path = "$HOME/.emorc";
