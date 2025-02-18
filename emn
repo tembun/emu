@@ -1,0 +1,183 @@
+#!/usr/local/bin/perl
+
+# A simple implementation of email notifier.
+# This programs simply checks the unread messages from your
+# IMAP server, reads these messages (thus mark them read)
+# and pops the notification window up. It does not dispose
+# received messages.
+#
+# The implementation of this is nothing but cut & paste from
+# `emo' utility (which is a email obtainer) with some changes.
+# Thus, the configuration file for this program (~/.emnrc) has
+# the very same format as one for `emo'. Though it omits the
+# `mda' field, but adds the `notifier' which sets the program
+# for sending notifications. Please, consult the `emo' source
+# code in order to get the information about `.emorc' config file.
+#
+# The `notifier' is by default set to /usr/local/bin/xmessage.
+# You can use `{FROM}' macro inside the `notifier' string and
+# it'll be substituted with email address of the sender.
+
+
+use strict;
+use Mail::IMAPClient;
+
+my $imap;
+
+my $HOME = $ENV{HOME};
+my $config_path = "$HOME/.emnrc";
+
+my %vars = (
+	"HOME" => $HOME
+);
+
+my %config = (
+	passfile => undef,
+	serv => undef,
+	login => undef,
+	password => undef,
+	notifier => "/usr/local/bin/xmessage 'new email from {FROM}.'",
+	interval => 30
+);
+
+
+sub sub_vars {
+	my ($line) = @_;
+	
+	if ($line =~ /\$(\w+)/) {
+		my $var = $1;
+		my $var_val = $vars{$var};
+		
+		$line =~ s/\$\w+/$var_val/g;
+	}
+	
+	return $line;
+}
+
+# parse main config file (~/.emnrc).
+sub parse_config {
+	my $is_config = open(CONFIG, "$config_path");
+	
+	if (!$is_config) {
+		die "[emn]: a presence of a config file",
+			"(~/.emnrc) is required.\n";
+	}
+	
+	while (my $line = <CONFIG>) {
+		# lines started with "#" are commented and ignored.
+		if ($line =~ /^#/) {
+			next;
+		}
+		
+		if ($line =~ /pass\s=>\s(.*)/) {
+			$config{passfile} = sub_vars($1);
+			next;
+		}
+		
+		if ($line =~ /notifier\s=>\s(.*)/) {
+			$config{notifier} = sub_vars($1);
+		}
+		
+		if ($line =~ /interval\s=>\s(.*)/) {
+			$config{interval} = sub_vars($1);
+			next;
+		}
+	}
+}
+
+sub parse_passfile() {
+	my $is_passfile = open(PASS, "$config{passfile}");
+	
+	if (!$is_passfile) {
+		die "[emn]: can't open a passfile you specified:",
+			"$config{passfile}.\n";
+	}
+	
+	while (my $line = <PASS>) {
+		# for the sake of simplicity, we do not support commented
+		# lines here. And I also suppose we don't need variables here.
+		
+		if ($line =~ /^serv\s(.*)/) {
+			$config{serv} = "$1";
+			next;
+		}
+		
+		if ($line =~ /^login\s(.*)/) {
+			$config{login} = "$1";
+			next;
+		}
+		
+		if ($line =~ /^password\s(.*)/) {
+			$config{password} = "$1";
+			next;
+		}
+	}
+}
+
+sub validate_config {
+	if (not $config{serv}
+		or not $config{login}
+		or not $config{password}
+	) {
+    	die "[emn]: either server, login or password are not",
+			"specified in the passfile ($config{passfile}).\n";
+	}
+}
+
+
+parse_config();
+parse_passfile();
+validate_config();
+
+$imap = Mail::IMAPClient->new(
+	Server => $config{serv},
+	User => $config{login},
+	Password => $config{password},
+	Ssl => 1,
+	Uid => 0,
+	IgnoreSizeErrors => 1
+) or die "[emn]: Could not connect to $config{serv}, ",
+	"terminating... $@\n";
+
+# all the operations are perform on "INBOX" folder.
+$imap->select("INBOX");
+
+while (1) {	
+	# handle connection time out.
+	while (!$imap->noop) {
+		# try to reconnect;
+		$imap->reconnect;
+		
+		# now check the result of our attempt.
+		if ($imap->IsConnected()) {
+			# we're connected. cool.
+			last;
+		}
+		else {
+			# try again after a while.
+			sleep 1;
+		}
+	}
+	
+	my @msgs = $imap->search("UNSEEN");
+	
+	if (@msgs) {
+		my $total = $#msgs + 1;
+		
+		for my $idx (0 .. $#msgs) {
+			my $msg_idx = $msgs[$idx];
+			
+			my $msg = $imap->message_string($msg_idx, 1);
+			$msg =~ s/\r\n/\n/g;
+			$msg =~ /<(.*)>/ or $msg =~ /^From: ([^<]*)\n/;
+			
+			my $from_addr = $1;
+			
+			$config{notifier} =~ s/\{FROM\}/$from_addr/g;
+			
+			system $config{notifier};
+		}
+	}
+	
+	sleep $config{interval};
+}
