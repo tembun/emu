@@ -143,21 +143,40 @@ parse_config();
 parse_passfile();
 validate_config();
 
-$imap = Mail::IMAPClient->new(
-	Server => $config{serv},
-	User => $config{login},
-	Password => $config{password},
-	Ssl => 1,
-	Uid => 0,
-	IgnoreSizeErrors => 1
-) or die "[emn]: Could not connect to $config{serv}, ",
-	"terminating... $@\n";
+#
+# Try to connect until we succeed.
+# This is helpful when there's no connection at program
+# startup, but it makes it possible to bring the daemon
+# to useful state when connection appears.
+#
+my $att = 0;
+while (!$imap) {
+	# Start sleeping only after first try we didn't succeed.
+	if ($att++) {
+		sleep 5;
+	}
+	$imap = Mail::IMAPClient->new(
+		Server => $config{serv},
+		User => $config{login},
+		Password => $config{password},
+		Ssl => 1,
+		Uid => 0,
+		IgnoreSizeErrors => 1
+	)
+}
 
 # All the operations are performed on "INBOX" folder.
 $imap->select("INBOX");
 
-while (1) {	
+while (1) {
+	#	
 	# Handle connection time out.
+	# Actually, this for some reasons don't work (`IsConnected'
+	# method retunrs true event if we are not connected.  That's
+	# why I added `or next' after the first command that we
+	# do with an IMAP client so is it fails it won't go further
+	# and will jump to the begining of loop.
+	#
 	while (!$imap->noop) {
 		# Try to reconnect;
 		$imap->reconnect;
@@ -174,7 +193,7 @@ while (1) {
 	}
 	
 	# Get all ``UNSEEN'' messages.
-	my @unread = $imap->unseen;
+	my @unread = $imap->unseen or next;
 	
 	if (@unread) {
 		my $total = $#unread + 1;
