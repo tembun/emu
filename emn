@@ -1,23 +1,35 @@
 #!/usr/local/bin/perl
 
-# A simple implementation of email notifier.
-# This programs simply checks the unread messages from your
-# IMAP server, reads these messages (thus mark them read)
-# and pops the notification window up. It does not dispose
-# received messages.
 #
-# The implementation of this is nothing but cut & paste from
+# A simple implementation of email notifier.
+# This programs utilizes two IMAP flags: ``UNSEEN'' and ``Flagged''
+# (assuming you don't use "Flagged" flag for any purpose): the
+# ``UNSEEN'' means message has not been seen by _you_ and 
+# ``Flagged'' means it _has_ been seen by this program, thus it
+# should _not_ notify about this message.  Otherwise, the program
+# pops up a notification window.  It does not dispose received
+# messages and basically it's supposed to be used with email
+# client through which you will mark the letter read.
+# To summarize: it searches ``UNSEEN'' messages, that are not marked
+# as ``Flagged'', reads them in order to extract the address of a
+# sender, then marks it ``UNSEEN'' back and sets the ``Flagged''
+# for it so that it would not report about it later, if you wouldn't
+# have read before the next time the daemon will check it, and
+# finally it pops up a window (/usr/local/bin/xmessage, by default)
+# with information about mail sender.  It does it every 30 seconds,
+# by default.
+#
+# The implementation of this is basically cut & paste from
 # `emo' utility (which is a email obtainer) with some changes.
 # Thus, the configuration file for this program (~/.emnrc) has
-# the very same format as one for `emo'. Though it omits the
+# the very same format as one for `emo'.  Though it omits the
 # `mda' field, but adds the `notifier' which sets the program
-# for sending notifications. Please, consult the `emo' source
+# for sending notifications.  Please, consult the `emo' source
 # code in order to get the information about `.emorc' config file.
 #
-# The `notifier' is by default set to /usr/local/bin/xmessage.
-# You can use `{FROM}' macro inside the `notifier' string and
-# it'll be substituted with email address of the sender.
-
+# You can use `{FROM}' macro inside the `notifier' string in the
+# config and it'll be substituted with sender's address.
+#
 
 use strict;
 use Mail::IMAPClient;
@@ -54,7 +66,7 @@ sub sub_vars {
 	return $line;
 }
 
-# parse main config file (~/.emnrc).
+# Parse main config file (~/.emnrc).
 sub parse_config {
 	my $is_config = open(CONFIG, "$config_path");
 	
@@ -64,7 +76,7 @@ sub parse_config {
 	}
 	
 	while (my $line = <CONFIG>) {
-		# lines started with "#" are commented and ignored.
+		# Lines started with "#" are commented and ignored.
 		if ($line =~ /^#/) {
 			next;
 		}
@@ -94,9 +106,11 @@ sub parse_passfile() {
 	}
 	
 	while (my $line = <PASS>) {
-		# for the sake of simplicity, we do not support commented
-		# lines here. And I also suppose we don't need variables here.
-		
+		#
+		# For the sake of simplicity, we do _not_ support
+		# commented lines here.  And I also suppose we don't
+		# need variables here.
+		#
 		if ($line =~ /^serv\s(.*)/) {
 			$config{serv} = "$1";
 			next;
@@ -119,8 +133,8 @@ sub validate_config {
 		or not $config{login}
 		or not $config{password}
 	) {
-    	die "[emn]: either server, login or password are not",
-			"specified in the passfile ($config{passfile}).\n";
+		die "[emn]: either server, login or password are not",
+		    "specified in the passfile ($config{passfile}).\n";
 	}
 }
 
@@ -139,45 +153,78 @@ $imap = Mail::IMAPClient->new(
 ) or die "[emn]: Could not connect to $config{serv}, ",
 	"terminating... $@\n";
 
-# all the operations are perform on "INBOX" folder.
+# All the operations are performed on "INBOX" folder.
 $imap->select("INBOX");
 
 while (1) {	
-	# handle connection time out.
+	# Handle connection time out.
 	while (!$imap->noop) {
-		# try to reconnect;
+		# Try to reconnect;
 		$imap->reconnect;
 		
-		# now check the result of our attempt.
+		# Now check the result of our attempt.
 		if ($imap->IsConnected()) {
-			# we're connected. cool.
+			# We're connected.  Cool.
 			last;
 		}
 		else {
-			# try again after a while.
+			# Try again after a while.
 			sleep 1;
 		}
 	}
 	
-	my @msgs = $imap->search("UNSEEN");
+	# Get all ``UNSEEN'' messages.
+	my @unread = $imap->unseen;
 	
-	if (@msgs) {
-		my $total = $#msgs + 1;
+	if (@unread) {
+		my $total = $#unread + 1;
 		
-		for my $idx (0 .. $#msgs) {
-			my $msg_idx = $msgs[$idx];
+		for my $idx (0 .. $#unread) {
+			my $msg_idx = $unread[$idx];
 			
+			#
+			# If this unseen message is marked ``Flagged'',
+			# it means we have already sent a notification
+			# about it and we're not going to do this again.
+			#
+			my @flags = $imap->flags($msg_idx);
+			if (grep(/^\\Flagged$/, @flags)) {
+				next;
+			}
+			
+			#
+			# This action mark message as seen, but we'll
+			# deny seeing later.
+			#
 			my $msg = $imap->message_string($msg_idx, 1);
 			$msg =~ s/\r\n/\n/g;
+			
+			# Extract address of a sender.
 			$msg =~ /<(.*)>/ or $msg =~ /^From: ([^<]*)\n/;
 			
 			my $from_addr = $1;
+			# Do _not_ modify the string inside `$config'.
+			(my $ntf_cfg = $config{notifier}) =~ (
+			    s/\{FROM\}/$from_addr/g
+			);
 			
-			$config{notifier} =~ s/\{FROM\}/$from_addr/g;
+			#
+			# Mark message as ``UNSEEN'' back, so that our
+			# email client can display it properly.
+			#
+			$imap->deny_seeing($msg_idx);
 			
-			system $config{notifier};
+			#
+			# Say that we've shown a notification for this
+			# message.
+			#
+			$imap->set_flag("Flagged", $msg_idx);
+			
+			# Call a notifier.
+			system $ntf_cfg;
 		}
 	}
 	
+	# Wait a while until next revision.
 	sleep $config{interval};
 }
