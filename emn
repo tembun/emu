@@ -219,7 +219,7 @@ while (1) {
 			$msg =~ s/\r\n/\n/g;
 			
 			# Extract address of a sender.
-			$msg =~ /<(.*)>/ or $msg =~ /^From: ([^<]*)\n/;
+			$msg =~ /^From: *(.*)/m;
 			
 			my $from_addr = $1;
 			# Do _not_ modify the string inside `$config'.
