@@ -15,7 +15,7 @@
 # sender, then marks it ``UNSEEN'' back and sets the ``Flagged''
 # for it so that it would not report about it later, if you wouldn't
 # have read before the next time the daemon will check it, and
-# finally it pops up a window (/usr/local/bin/xmessage, by default)
+# finally it pops up a window (/usr/local/bin/xnf, by default)
 # with information about mail sender.  It does it every 30 seconds,
 # by default.
 #
@@ -48,7 +48,7 @@ my %config = (
 	serv => undef,
 	login => undef,
 	password => undef,
-	notifier => "/usr/local/bin/xmessage 'new email from {FROM}.'",
+	notifier => "/usr/local/bin/xnf 'Email from {FROM}'",
 	interval => 30
 );
 
