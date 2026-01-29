@@ -55,41 +55,33 @@ my %config = (
 
 sub sub_vars {
 	my ($line) = @_;
-	
 	if ($line =~ /\$(\w+)/) {
 		my $var = $1;
 		my $var_val = $vars{$var};
-		
 		$line =~ s/\$\w+/$var_val/g;
 	}
-	
 	return $line;
 }
 
 # Parse main config file (~/.emnrc).
 sub parse_config {
 	my $is_config = open(CONFIG, "$config_path");
-	
 	if (!$is_config) {
 		die "[emn]: a presence of a config file",
 			"(~/.emnrc) is required.\n";
 	}
-	
 	while (my $line = <CONFIG>) {
 		# Lines started with "#" are commented and ignored.
 		if ($line =~ /^#/) {
 			next;
 		}
-		
 		if ($line =~ /pass\s=>\s(.*)/) {
 			$config{passfile} = sub_vars($1);
 			next;
 		}
-		
 		if ($line =~ /notifier\s=>\s(.*)/) {
 			$config{notifier} = sub_vars($1);
 		}
-		
 		if ($line =~ /interval\s=>\s(.*)/) {
 			$config{interval} = sub_vars($1);
 			next;
@@ -99,12 +91,10 @@ sub parse_config {
 
 sub parse_passfile() {
 	my $is_passfile = open(PASS, "$config{passfile}");
-	
 	if (!$is_passfile) {
 		die "[emn]: can't open a passfile you specified:",
 			"$config{passfile}.\n";
 	}
-	
 	while (my $line = <PASS>) {
 		#
 		# For the sake of simplicity, we do _not_ support
@@ -115,12 +105,10 @@ sub parse_passfile() {
 			$config{serv} = "$1";
 			next;
 		}
-		
 		if ($line =~ /^login\s(.*)/) {
 			$config{login} = "$1";
 			next;
 		}
-		
 		if ($line =~ /^password\s(.*)/) {
 			$config{password} = "$1";
 			next;
@@ -180,7 +168,6 @@ while (1) {
 	while (!$imap->noop) {
 		# Try to reconnect;
 		$imap->reconnect;
-		
 		# Now check the result of our attempt.
 		if ($imap->IsConnected()) {
 			# We're connected.  Cool.
@@ -191,16 +178,12 @@ while (1) {
 			sleep 1;
 		}
 	}
-	
 	# Get all ``UNSEEN'' messages.
 	my @unread = $imap->unseen or next;
-	
 	if (@unread) {
 		my $total = $#unread + 1;
-		
 		for my $idx (0 .. $#unread) {
 			my $msg_idx = $unread[$idx];
-			
 			#
 			# If this unseen message is marked ``Flagged'',
 			# it means we have already sent a notification
@@ -210,40 +193,33 @@ while (1) {
 			if (grep(/^\\Flagged$/, @flags)) {
 				next;
 			}
-			
 			#
 			# This action mark message as seen, but we'll
 			# deny seeing later.
 			#
 			my $msg = $imap->message_string($msg_idx, 1);
 			$msg =~ s/\r\n/\n/g;
-			
 			# Extract address of a sender.
 			$msg =~ /^From: *(.*)/m;
-			
 			my $from_addr = $1;
 			# Do _not_ modify the string inside `$config'.
 			(my $ntf_cfg = $config{notifier}) =~ (
 			    s/\{FROM\}/$from_addr/g
 			);
-			
 			#
 			# Mark message as ``UNSEEN'' back, so that our
 			# email client can display it properly.
 			#
 			$imap->deny_seeing($msg_idx);
-			
 			#
 			# Say that we've shown a notification for this
 			# message.
 			#
 			$imap->set_flag("Flagged", $msg_idx);
-			
 			# Call a notifier.
-			system $ntf_cfg;
+			$from_addr and system $ntf_cfg;
 		}
 	}
-	
 	# Wait a while until next revision.
 	sleep $config{interval};
 }

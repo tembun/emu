@@ -82,23 +82,18 @@ while (my $emb_line = <EMB_OUT>) {
 			print "$emb_line";
 			next;
 		}
-		
 		# grab the index which we'll later use to get
 		# an attachment actual content via `emb` again.
 		my $idx = $1;
-		
 		# save the attachment file name as well.
 		my $fname = "$2";
-		
 		# if we've specified a particular index(es) of
 		# attachments we want to grab and the current one
 		# is not one of them - skip it.
 		if (@which and not grep /$idx/, @which) {
 			next;
 		}
-		
 		# here, we know this is an attachment we'll save.
-		
 		# if our main destination directory hasn't been
 		# created yet - do that.
 		if (not $att_found) {
@@ -106,30 +101,24 @@ while (my $emb_line = <EMB_OUT>) {
 				or die "[ema]: can't create destination dir: $dest.";
 		}
 		$att_found = 1;
-		
 		# now we pass or mail (seats in `$stdin`) into
 		# `emb` again but this time with a particular index.
 		open2(\*ATT_OUT, \*ATT_IN, "$emb_path", "$idx")
 			or die "[ema]: can't open $emb_path.";
-		
 		print ATT_IN $stdin;
 		close (ATT_IN);
-		
 		# prepare a final destination path for our file.
 		my $dest_file = "$dest/$fname";
 		open(DEST, ">", "$dest_file")
 			or die "[ema]: can't open destination file: $dest_file.";
-		
 		# and write to the resulting file decoded version of
 		# the attachment.
 		while (my $att_line = <ATT_OUT>) {
 			my $att_line_decoded = decode_base64($att_line);
-			
 			print DEST $att_line_decoded;
 		}
 		close (DEST);
 		close (ATT_OUT);
-		
 		# print out the destination path for a file.
 		print "$dest_file\n";
 	}

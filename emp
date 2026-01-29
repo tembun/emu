@@ -122,7 +122,6 @@ my $date_formatted = "";
 
 my sub format_date {
 	my ($date_input) = @_;
-	
 	# check if date format is not suitable for mbox "From" line.
 	my (
 		$week_day,
@@ -142,16 +141,13 @@ my sub format_date {
 		# Date.
 		\s+(\d{1,2}:\d{1,2}:\d{1,2})
 	/x;
-	
 	# add a leading zero to the month day if it is required.
 	if (length($month_day) == 1) {
 		$month_day = "0$month_day";
 	}
-	
 	if ($week_day) {
 		return "$week_day $month $month_day $time $year";
 	}
-	
 	return $date_input;
 }
 
@@ -164,10 +160,8 @@ my sub build_from_line {
 # headers may be encoded in base64.
 my sub prepare_header {
 	my ($line) = @_;
-	
 	# if header is not somehow encoded, it'll be printed as is.
 	my $decoded = decode("MIME-Header", $line);
-	
 	return $decoded;
 }
 
@@ -176,20 +170,15 @@ my sub prepare_header {
 # we also flush the header lines here.
 my sub switch_to_message_or_text {
 	$prev_header = "";
-	
 	if ($boundary) {
 		$within = "message";
 	} else {
 		$within = "text";
 	}
-	
 	my $from = prepare_header($wanted_headers{"From: "});
 	my $to = prepare_header($wanted_headers{"To: "});
-	
 	my $date = $wanted_headers{"Date: "};
-	
 	my $msg_id = $wanted_headers{"Message-ID: "};
-	
 	# letter can easily has no "Subject" header at all.
 	my $subject;
 	if ($wanted_headers{"Subject: "} ne "") {
@@ -197,7 +186,6 @@ my sub switch_to_message_or_text {
 	} else {
 		$subject = "Subject: <none>\n";
 	}
-	
 	# the same with "Cc" field, but in case of that, we won't
 	# print it at all (compare with dummy value for "Subject").
 	my $cc;
@@ -206,7 +194,6 @@ my sub switch_to_message_or_text {
 	} else {
 		$cc = "";
 	}
-	
 	# and the very same with "In-Reply-To".
 	my $in_reply;
 	if ($wanted_headers{"In-Reply-To: "} ne "") {
@@ -215,7 +202,6 @@ my sub switch_to_message_or_text {
 	else {
 		$in_reply = "";
 	}
-	
 	# because of the fact "From" header (as any other headers)
 	# may be encoded, we want to decode it first (done in `prepare_header`),
 	# for sender address be clear. and only after that want we build the
@@ -229,11 +215,8 @@ my sub switch_to_message_or_text {
 	) {
 		$from_addr = $1;
 	}
-	
 	my $from_line = build_from_line();
-	
 	my $headers = "$date$from$to$cc$subject$msg_id$in_reply";
-	
 	$letter_output .= "$from_line$headers\n";
 }
 
@@ -242,11 +225,9 @@ my sub reset_variables {
 	$wanted_headers{"To: "} = "";
 	$wanted_headers{"Subject: "} = "";
 	$wanted_headers{"Date: "} = "";
-	
 	$boundary = "";
 	$letter_output = "";
 	$from_addr = "";
-	
 	@parts = ();
 	%part = ();
 }
@@ -254,12 +235,9 @@ my sub reset_variables {
 my sub flush_message {
 	if ($boundary) {
 		my @content_types = map { $_->{Type} } @parts;
-		
 		my @picked_parts;
-		
 		# tell if we have at least one text/plain part.
 		my $got_plain_text = 0;
-		
 		# determine a value for `$got_plain_text`.
 		for my $part (@parts) {
 			# it's important that we are not interested in
@@ -272,7 +250,6 @@ my sub flush_message {
 				$got_plain_text = 1;
 			}
 		}
-		
 		# if we got a plain text, then we can pick up the
 		# parts we're interested in. pick a text/plain
 		# body and all the attachments.
@@ -281,7 +258,6 @@ my sub flush_message {
 				# save a version of body text without newlines
 				# in order to check does it make any sense.
 				(my $text_chopped = $part->{Text}) =~ s/\n//g;
-				
 				if (
 					($part->{Type} =~ /^text\/plain/
 						and $text_chopped)
@@ -297,17 +273,13 @@ my sub flush_message {
 		else {
 			@picked_parts = @parts;
 		}
-		
 		# check the length of the array.
 		# i.e. evaluate it in scalar context.
 		my $picked_len = @picked_parts;
-		
 		my $single_part = $picked_len == 1;
 		my $message_text = "";
-		
 		for my $picked_part (@picked_parts) {
 			my $prepared_text = $picked_part->{Text};
-			
 			if (
 				$picked_part->{"Transfer-Encoding"} =~ /^base64/
 				and
@@ -317,7 +289,6 @@ my sub flush_message {
 			) {
 				$prepared_text = decode("UTF-8", decode_base64($prepared_text)) . "\n";
 			}
-			
 			if ($single_part) {
 				$message_text .= $prepared_text;
 			}
@@ -340,7 +311,6 @@ my sub flush_message {
 						$picked_part->{Type} =~ s/;.*//;
 					}
 				}
-				
 				my $type_line;
 				if ($filename) {
 					$type_line = (
@@ -350,7 +320,6 @@ my sub flush_message {
 				else {
 					$type_line = "Content-Type: $picked_part->{Type}\n\n";
 				}
-				
 				$message_text .= (
 					"--$boundary\n"
 					.
@@ -360,18 +329,13 @@ my sub flush_message {
 				);
 			}
 		}
-		
 		if (not $single_part) {			
 			$message_text .= "--$boundary--\n\n"
 		}
-		
 		$message_text .= "\n";
-		
 		$letter_output .= $message_text;
 	}
-	
 	$final_output .= $letter_output . "\n";
-	
 	reset_variables();
 }
 
@@ -383,7 +347,6 @@ while ( my $line = <> ) {
 		or
 		$within eq "text"
 	) {
-		
 		if ($boundary) {
 			# check for end-boundary.
 			if ($line =~ /^--$boundary--/
@@ -394,17 +357,13 @@ while ( my $line = <> ) {
 				if ($line =~ /^--$boundary_nested--/) {
 					$boundary_nested = "";
 				}
-				
 				if ($within eq "text") {
 					push (@parts, { %part });
 					%part = ();
 				}
-				
 				$within = "text";
-				
 				next;
 			}
-			
 			# check for start-boundary.
 			if ($line =~ /^--$boundary/
 				or ($boundary_nested and
@@ -414,25 +373,19 @@ while ( my $line = <> ) {
 					push (@parts, { %part });
 					%part = ();
 				}
-				
 				$within = "types";
-				
 				next;
 			}
 		}
-		
 	}
-	
 	if ($within eq "text") {
 		for my $delimiter (@delimiters) {
 			if ($line =~ /^$delimiter/) {
 				flush_message();
-				
 				$within = "head";
 				goto handle_head;
 			}
 		}
-		
 		# for multi-part messages we accumulate the content
 		# of each part separately (and then decide which to use).
 		if ($boundary) {
@@ -442,12 +395,9 @@ while ( my $line = <> ) {
 		else {
 			$letter_output .= $line;
 		}
-		
 		next;
 	}
-	
 	if ($within eq "types") {
-		
 		if ($line eq "\n") {
 			# we don't want to store a part that tells that
 			# it will use a nested boundary to separate it's own
@@ -456,21 +406,17 @@ while ( my $line = <> ) {
 				%part = ();
 				$after_nested_part_types = 0;
 			}
-			
 			$within = "text";
 			next;
 		}
-		
 		if ($line =~ /boundary=\"(.*)\"/) {
 			$boundary_nested = $1;
 			$after_nested_part_types = 1;
 			next;
 		}
-		
 		my ($type, $value) = (
 			$line =~ /Content-(.*?):\s(.*?)\n/
 		);
-		
 		# this means that line most definitely start with spaces
 		# and we will append this line to the end of last saved type.
 		if (!$type) {
@@ -484,10 +430,8 @@ while ( my $line = <> ) {
 				$line =~ s/[\t\s\n]//g;
 				$part{$prev_type} .= "; $line";
 			}
-			
 			next;
 		}
-		
 		if (
 			$type eq "Disposition"
 			or
@@ -500,19 +444,14 @@ while ( my $line = <> ) {
 		} else {
 			$prev_type = "";
 		}
-		
-		
 	}
-	
 	# a lable for us to goto.
 	handle_head:
 	if ($within eq "head") {
-		
 		if ($line eq "\n") {
 			switch_to_message_or_text();
 			next;
 		}
-		
 		# if line does NOT start with spaces, then it's
 		# a begining of a new header field, so remember this.
 		if ($line =~ /^([^\t\s]*?:\s).*/) {
@@ -527,7 +466,6 @@ while ( my $line = <> ) {
 			if ($line =~ /[\s\t]*=\?.*?\?(B|Q)\?(.*)\?=/) {
 				$line =~ s/^[\t\s]*//;
 			}
-			
 			# now, append it to previously saved value (from which
 			# we need to remove the ending newline).
 			if (grep(/$prev_header/, keys %wanted_headers)) {
@@ -536,24 +474,19 @@ while ( my $line = <> ) {
 				next;
 			}
 		}
-		
 		if ($line =~ /boundary=\"(.*)\"/) {
 			$boundary = $1;
 		}
-		
 		if ($line =~ /Date:\s(.*)/) {
 			$date_formatted = format_date($1);
 		}
-		
 		# pick and print only headers we want from.
 		for my $wanted_header (keys %wanted_headers) {
 			if ($line =~ /^$wanted_header/) {
 				$wanted_headers{$wanted_header} = $line;
 			}
 		}
-		
 	}
-	
 }
 
 # we need to ensure that the last message was flushed

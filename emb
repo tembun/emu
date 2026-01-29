@@ -61,7 +61,6 @@ my $final_output = "";
 while (my $line = <STDIN>) {
 	# throw stdin away.
 	if ($discard_stdin) { next };
-	
 	if ($print_till_next and $is_printing) {
 		if ($line =~ /--$boundary/) {
 			$discard_stdin = 1;
@@ -70,7 +69,6 @@ while (my $line = <STDIN>) {
 			next;
 		}
 	}
-	
 	# this basically means we're still in headers.
 	if (not $decision_done) {
 		# newline has just occured, so examine
@@ -83,30 +81,24 @@ while (my $line = <STDIN>) {
 			if ( $line =~ /^--(([-=\.A-z\d\\+]){25,})/ ) {
 				$boundary = $1;
 				$multipart = 1;
-				
 				# assume the letter is formatted nice.
 				$within = "types";
-				
 				$expect_boundary_now = 0;
 			} else {
 				$multipart = 0;
-				
 				# means this line is already part of a body message,
 				# so include it in output.
 				$final_output .= $line;
 			}
-			
 			$decision_done = 1;
 			next;
 		}
-		
 		# leave headers, enter the message itself.
 		if ($line eq "\n") {
 			$expect_boundary_now = 1;
 			next;
 		}
 	}
-	
 	if ($decision_done) {
 		if ($multipart) {
 			if ($within eq "types") {
@@ -116,14 +108,11 @@ while (my $line = <STDIN>) {
 				# it's an appropriate moment for us to do that.
 				if ($line eq "\n") {
 					$within = "body";
-					
 					if ($print_till_next) {
 						$is_printing = 1;
 					}
-					
 					next;
 				}
-				
 				if ($line =~ /^Content-Type: (.*)/) {
 					# if we're looking for a particular type
 					# and it is it, the start waiting for an
@@ -135,7 +124,6 @@ while (my $line = <STDIN>) {
 						}
 						next;
 					}
-					
 					# so, it's a multi-part message and we don't want
 					# a specific part, then just save the information about
 					# part content type.
@@ -145,15 +133,12 @@ while (my $line = <STDIN>) {
 					}
 				}
 			}
-			
 			if ($within eq "body") {
 				# if we're in body and meet the boundary line,
 				# the switch back to "types".
 				if ($line =~ /^--$boundary/) {
 					$within = "types";
-					
 					++$part_idx;
-					
 					next;
 				}
 			}
@@ -179,14 +164,11 @@ if (not $which and $multipart) {
 	for my $idx (0 .. $#parts) {
 		my $part_type = $parts[$idx];
 		my $printed_idx = $idx + 1;
-		
 		my $mb_attach_mark = "";
 		if ($part_type =~ /; (file)?name=\".*\"/) {
 			$mb_attach_mark = "[a] ";
 		}
-		
 		my $string = "$printed_idx: $mb_attach_mark$part_type\n";
-		
 		$final_output .= $string;
 	}
 }

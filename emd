@@ -74,77 +74,63 @@ sub notify {
 	if (not $notifier) {
 		return;
 	}
-	
 	if ($out_filename eq $config{default}) {
 		$notifier =~ s/{.*}//g;
 	} else {
 		$notifier =~ s/{(.*)}/\1/g;
 	}
-	
 	$notifier =~ s/\&addr/$sender_addr/g;
 	$notifier =~ s/\&inbox/$out_filename/g;
 	$notifier =~ s/\\n/\n/g;
-	
 	exec $notifier;
 }
 
 # handle config variables (the ones that start from "$").
 sub substitute_vars {
 	my ($line) = @_;
-	
 	if ($line =~ /\$(\w+)/) {
 		my $var = $1;
 		my $var_val = $config{vars}{$var};
-		
 		$line =~ s/\$\w+/$var_val/g;
 	}
-	
 	return $line;
 }
 
 # extract config values from the config file.
 sub parse_config {
 	my $is_config = open(CONFIG, "$config_path");
-	
 	if (not $is_config) {
 		return;
 	}
-	
 	while (my $line = <CONFIG>) {
 		# ignore comment lines.
 		if ($line =~ /^#/) {
 			next;
 		}
-		
 		# get formatter.
 		if ($line =~ /formatter\s=>\s(.*)/) {
 			$config{formatter} = substitute_vars($1);
 			next;
 		}
-		
 		# get default inbox.
 		if ($line =~ /default\s=>\s(.*)/) {
 			$config{default} = substitute_vars($1);
 			next;
 		}
-		
 		# get a string for notifier execution.
 		if ($line =~ /notifier\s=>\s(.*)/) {
 			$config{notifier} = substitute_vars($1);
 			next;
 		}
-		
 		# get and save variable names and values.
 		if ($line =~ /\$(\w+)\s=\s(.*)/) {
 			$config{vars}->{$1} = substitute_vars($2);
 			next;
 		}
-		
 		# handle and save rules.
 		if ($line =~ /(\/.*\/.*)\s=>\s(.*)/) {
 			my $pattern = $1;
 			my $path = substitute_vars($2);
-			
 			push (@{$config{rules}}, {$pattern => $path});
 			next;
 		}
@@ -174,21 +160,17 @@ close (FORMATTER_IN);
 
 # now we can read the formatter output using *output* filehandle.
 while ( my $line = <FORMATTER_OUT> ) {
-	
 	# first of all, we need to tell if we're inside letter headers.
 	# 'cause if we are, then we must start checking filter rules.
 	if ($line =~ /^From\s/) {		
 		$headers = 1;
 		goto save_and_next;
 	}
-	
 	if ($headers) {
-		
 		if ($line eq "\n") {
 			$headers = 0;
 			goto save_and_next;
 		}
-		
 		# can take it as is, 'cause we've just piped a raw mail
 		# into formatter, thus it mustn't be encoded (if the formatter's nice,
 		# like emp).
@@ -200,11 +182,9 @@ while ( my $line = <FORMATTER_OUT> ) {
 		) {
 			$sender_addr = $1;
 		}
-		
 		# checking the rules.
 		for my $rule (@{$config{rules}}) {
 			my %rule = %{$rule};
-			
 			for my $pattern (keys %rule) {
 				my $pattern_regex ;
 				my $regex_mod;
@@ -218,7 +198,6 @@ while ( my $line = <FORMATTER_OUT> ) {
 					print STDERR "[emd]: wrong pattern specified: $pattern.\n";
 					next;
 				}
-				
 				# determine the final destination of a file depending
 				# on rule matches. if neither match, the default it is.
 				my $regex = qr/(?$regex_mod)$pattern_regex/;
@@ -227,13 +206,10 @@ while ( my $line = <FORMATTER_OUT> ) {
 				}
 			}
 		}
-		
 	}
-	
 	# we want to print an entire mail anyway.
 	save_and_next:
 	$final_output .= "$line";
-	
 }
 
 # open disposition file and append mail to it.

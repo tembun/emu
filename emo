@@ -78,42 +78,34 @@ my %config = (
 # it will not be called during parsing the passfile.
 sub sub_vars {
 	my ($line) = @_;
-	
 	if ($line =~ /\$(\w+)/) {
 		my $var = $1;
 		my $var_val = $vars{$var};
-		
 		$line =~ s/\$\w+/$var_val/g;
 	}
-	
 	return $line;
 }
 
 # parse main config file (~/.emorc).
 sub parse_config {
 	my $is_config = open(CONFIG, "$config_path");
-	
 	if (!$is_config) {
 		die "[emo]: a presence of a config file",
 			"(~/.emorc) is required.\n";
 	}
-	
 	while (my $line = <CONFIG>) {
 		# lines started with "#" are commented and ignored.
 		if ($line =~ /^#/) {
 			next;
 		}
-		
 		if ($line =~ /pass\s=>\s(.*)/) {
 			$config{passfile} = sub_vars($1);
 			next;
 		}
-		
 		if ($line =~ /mda\s=>\s(.*)/) {
 			$config{mda} = sub_vars($1);
 			next;
 		}
-		
 		if ($line =~ /interval\s=>\s(.*)/) {
 			$config{interval} = sub_vars($1);
 			next;
@@ -125,26 +117,21 @@ sub parse_config {
 # keep writing to a `%config` variable.
 sub parse_passfile() {
 	my $is_passfile = open(PASS, "$config{passfile}");
-	
 	if (!$is_passfile) {
 		die "[emo]: can't open a passfile you specified:",
 			"$config{passfile}.\n";
 	}
-	
 	while (my $line = <PASS>) {
 		# for the sake of simplicity, we do not support commented
 		# lines here. And I also suppose we don't need variables here.
-		
 		if ($line =~ /^serv\s(.*)/) {
 			$config{serv} = "$1";
 			next;
 		}
-		
 		if ($line =~ /^login\s(.*)/) {
 			$config{login} = "$1";
 			next;
 		}
-		
 		if ($line =~ /^password\s(.*)/) {
 			$config{password} = "$1";
 			next;
@@ -161,7 +148,6 @@ sub validate_config {
     	die "[emo]: either server, login or password are not",
 			"specified in the passfile ($config{passfile}).\n";
 	}
-	
 	if (! -f $config{mda}) {
 		die "[emo]: an MDA you specified is not a regular file: ",
 			"$config{mda}.\n";
@@ -172,24 +158,16 @@ sub validate_config {
 # both grab and daemon modes use this subroutine.
 sub dispose_msgs {
 	my (@msgs) = @_;
-	
 	my $total = $#msgs + 1;
-	
 	for my $idx (0 .. $#msgs) {
 		my $msg_idx = $msgs[$idx];
-		
 		open(MDA, "|-", "$config{mda}")
 			or die "[emo]: Can't open an MDA program you specified: ",
 				"$config{mda}.\n";
-		
 		my $msg = $imap->message_string($msg_idx, 1);
-		
 		$msg =~ s/\r\n/\n/g;
-		
 		print MDA $msg;
-		
 		close(MDA);
-		
 		print "[emo]: mails obtained: @{[$idx+1]}/$total.\n";
 	}
 }
@@ -199,7 +177,6 @@ sub dispose_msgs {
 # the program finishes.
 sub grab_mode {
 	my @msgs = $imap->search("ALL");
-	
 	dispose_msgs @msgs;
 }
 
@@ -208,12 +185,10 @@ sub grab_mode {
 # them as well.
 sub daemon_mode {
 	while (1) {
-		
 		# handle connection time out.
 		while (!$imap->noop) {
 			# try to reconnect;
 			$imap->reconnect;
-			
 			# now check the result of our attempt.
 			if ($imap->IsConnected()) {
 				# we're connected. cool.
@@ -224,11 +199,8 @@ sub daemon_mode {
 				sleep 1;
 			}
 		}
-		
 		my @msgs = $imap->search("UNSEEN");
-		
 		dispose_msgs @msgs;
-		
 		sleep $config{interval};
 	}
 }
