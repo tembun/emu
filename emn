@@ -1,225 +1,143 @@
-#!/usr/local/bin/perl
+#!/usr/bin/env python3
 
 #
-# A simple implementation of email notifier.
-# This programs utilizes two IMAP flags: ``UNSEEN'' and ``Flagged''
-# (assuming you don't use "Flagged" flag for any purpose): the
-# ``UNSEEN'' means message has not been seen by _you_ and 
-# ``Flagged'' means it _has_ been seen by this program, thus it
-# should _not_ notify about this message.  Otherwise, the program
-# pops up a notification window.  It does not dispose received
-# messages and basically it's supposed to be used with email
-# client through which you will mark the letter read.
-# To summarize: it searches ``UNSEEN'' messages, that are not marked
-# as ``Flagged'', reads them in order to extract the address of a
-# sender, then marks it ``UNSEEN'' back and sets the ``Flagged''
-# for it so that it would not report about it later, if you wouldn't
-# have read before the next time the daemon will check it, and
-# finally it pops up a window (/usr/local/bin/xnf, by default)
-# with information about mail sender.  It does it every 30 seconds,
-# by default.
+# emn -- email notifier.
 #
-# The implementation of this is basically cut & paste from
-# `emo' utility (which is a email obtainer) with some changes.
-# Thus, the configuration file for this program (~/.emnrc) has
-# the very same format as one for `emo'.  Though it omits the
-# `mda' field, but adds the `notifier' which sets the program
-# for sending notifications.  Please, consult the `emo' source
-# code in order to get the information about `.emorc' config file.
+# The main configuration file for the program is $HOME/.emnrc, which
+# should define the following variables, using the syntax:
+#   "%s = %s", variable_name, variable_value
+# pass      A filepath to the private configuration file (see below).
+# notifier  A command that will be used for sending notification.
+#           The '{FROM}' substring will be replaced with the sender address.
+# interval  Interval in second, in which the program will re-check the inbox.
+# $HOME in the variable name will be replaced with the user's home directory.
 #
-# You can use `{FROM}' macro inside the `notifier' string in the
-# config and it'll be substituted with sender's address.
+# The private (pass-) configuration file is used to store credentials for
+# accessing the mail inbox. This file should have the following variables set
+# using the following syntax:
+#   "%s %s", variable_name variable_value
+# serv      The IMAP server.
+# login     Login at the IMAP server.
+# password  Password for the login.
 #
 
-use strict;
-use Mail::IMAPClient;
+from email.header import decode_header, make_header
+import email
+import imaplib
+import os
+import sys
+import time
 
-my $imap;
+HOME = os.getenv('HOME')
+CONFIG_PATH = f"{HOME or '.'}/.emnrc"
+progname = os.path.basename(sys.argv[0]).removesuffix('.py')
 
-my $HOME = $ENV{HOME};
-my $config_path = "$HOME/.emnrc";
-
-my %vars = (
-	"HOME" => $HOME
-);
-
-my %config = (
-	passfile => undef,
-	serv => undef,
-	login => undef,
-	password => undef,
-	notifier => "/usr/local/bin/xnf 'Email from {FROM}'",
-	interval => 30
-);
-
-
-sub sub_vars {
-	my ($line) = @_;
-	if ($line =~ /\$(\w+)/) {
-		my $var = $1;
-		my $var_val = $vars{$var};
-		$line =~ s/\$\w+/$var_val/g;
-	}
-	return $line;
+config = {
+        'pass': {
+            'name': 'pass',
+        },
+        'server': {
+            'name': 'serv',
+            'private': True,
+        },
+        'login': {
+            'name': 'login',
+            'private': True,
+        },
+        'password': {
+            'name': 'password',
+            'private': True,
+        },
+        'notifier': {
+            'name': 'notifier'
+        },
+        'interval': {
+            'name': 'interval',
+            'value': 30,
+        },
 }
 
-# Parse main config file (~/.emnrc).
-sub parse_config {
-	my $is_config = open(CONFIG, "$config_path");
-	if (!$is_config) {
-		die "[emn]: a presence of a config file",
-			"(~/.emnrc) is required.\n";
-	}
-	while (my $line = <CONFIG>) {
-		# Lines started with "#" are commented and ignored.
-		if ($line =~ /^#/) {
-			next;
-		}
-		if ($line =~ /pass\s=>\s(.*)/) {
-			$config{passfile} = sub_vars($1);
-			next;
-		}
-		if ($line =~ /notifier\s=>\s(.*)/) {
-			$config{notifier} = sub_vars($1);
-		}
-		if ($line =~ /interval\s=>\s(.*)/) {
-			$config{interval} = sub_vars($1);
-			next;
-		}
-	}
-}
+def warn(*args, **kwargs):
+    print('%s: %s' % (progname, *args), file=sys.stderr, **kwargs)
 
-sub parse_passfile() {
-	my $is_passfile = open(PASS, "$config{passfile}");
-	if (!$is_passfile) {
-		die "[emn]: can't open a passfile you specified:",
-			"$config{passfile}.\n";
-	}
-	while (my $line = <PASS>) {
-		#
-		# For the sake of simplicity, we do _not_ support
-		# commented lines here.  And I also suppose we don't
-		# need variables here.
-		#
-		if ($line =~ /^serv\s(.*)/) {
-			$config{serv} = "$1";
-			next;
-		}
-		if ($line =~ /^login\s(.*)/) {
-			$config{login} = "$1";
-			next;
-		}
-		if ($line =~ /^password\s(.*)/) {
-			$config{password} = "$1";
-			next;
-		}
-	}
-}
+def err(*args, **kwargs):
+    warn(*args, **kwars)
+    sys.exit(1)
 
-sub validate_config {
-	if (not $config{serv}
-		or not $config{login}
-		or not $config{password}
-	) {
-		die "[emn]: either server, login or password are not",
-		    "specified in the passfile ($config{passfile}).\n";
-	}
-}
+def get_var(var):
+    return config[var]['value']
 
+def process_config():
+    try:
+        with open(CONFIG_PATH, 'r') as f:
+            lines = f.read().split('\n')
+            lines = [l for l in lines if l]
+    except:
+        err(f'Config file not found: {CONFIG_PATH}')
+    vars = [l.split(' = ') for l in lines]
+    vars = { a[0]: a[1] for a in vars }
+    for prop in config:
+        data = config[prop]
+        if data.get('private'):
+            continue
+        var_val_raw = vars.get(data['name'])
+        if var_val_raw:
+            var_val = var_val_raw.replace('$HOME', HOME)
+            data['value'] = var_val
+        elif not data.get('value'):
+            err(f"Config variable is not set: {data['name']}")
 
-parse_config();
-parse_passfile();
-validate_config();
+    try:
+        with open(get_var('pass'), 'r') as f:
+            lines = f.read().split('\n')
+            lines = [l for l in lines if l]
+    except:
+        err(f"Pass-config file not found: {get_var('pass')}")
+    vars = [l.split(' ') for l in lines]
+    vars = {a[0]: a[1] for a in vars }
+    for prop in config:
+        data = config[prop]
+        if not data.get('private'):
+            continue
+        var_val = vars.get(data['name'])
+        if not var_val:
+            err(f"Private-config variable is not set: {data['name']}")
+        data['value'] = var_val
 
-#
-# Try to connect until we succeed.
-# This is helpful when there's no connection at program
-# startup, but it makes it possible to bring the daemon
-# to useful state when connection appears.
-#
-my $att = 0;
-while (!$imap) {
-	# Start sleeping only after first try we didn't succeed.
-	if ($att++) {
-		sleep 5;
-	}
-	$imap = Mail::IMAPClient->new(
-		Server => $config{serv},
-		User => $config{login},
-		Password => $config{password},
-		Ssl => 1,
-		Uid => 0,
-		IgnoreSizeErrors => 1
-	)
-}
+def check_and_notify():
+    status, data = mail.search(None, 'UNFLAGGED')
+    mail_ids = []
+    for block in data: mail_ids += block.split()
+    for mail_id in mail_ids:
+        status, data = mail.fetch(mail_id, 'BODY[HEADER.FIELDS(FROM)]')
+        for response_part in data:
+            if isinstance(response_part, tuple):
+                message = email.message_from_bytes(response_part[1])
+                sender = make_header(decode_header(message['from']))
+                mail.store(mail_id, '-FLAGS', r'\SEEN')
+                mail.store(mail_id, '+FLAGS', r'\Flagged')
+                notifier_cmd = get_var('notifier').replace('{FROM}', str(sender))
+                os.system(notifier_cmd)
 
-# All the operations are performed on "INBOX" folder.
-$imap->select("INBOX");
+process_config()
+while True:
+    try:
+        mail = imaplib.IMAP4_SSL(get_var('server'))
+        break
+    except:
+        DELAY = 5
+        warn(f"Can not connect to the server: {get_var('server')}."
+             f' Retry after {DELAY} seconds')
+        try:
+            time.sleep(DELAY)
+        except:
+            exit(0)
+mail.login(get_var('login'), get_var('password'))
+mail.select('inbox')
 
-while (1) {
-	#	
-	# Handle connection time out.
-	# Actually, this for some reasons don't work (`IsConnected'
-	# method retunrs true event if we are not connected.  That's
-	# why I added `or next' after the first command that we
-	# do with an IMAP client so is it fails it won't go further
-	# and will jump to the begining of loop.
-	#
-	while (!$imap->noop) {
-		# Try to reconnect;
-		$imap->reconnect;
-		# Now check the result of our attempt.
-		if ($imap->IsConnected()) {
-			# We're connected.  Cool.
-			last;
-		}
-		else {
-			# Try again after a while.
-			sleep 1;
-		}
-	}
-	# Get all ``UNSEEN'' messages.
-	my @unread = $imap->unseen or next;
-	if (@unread) {
-		my $total = $#unread + 1;
-		for my $idx (0 .. $#unread) {
-			my $msg_idx = $unread[$idx];
-			#
-			# If this unseen message is marked ``Flagged'',
-			# it means we have already sent a notification
-			# about it and we're not going to do this again.
-			#
-			my @flags = $imap->flags($msg_idx);
-			if (grep(/^\\Flagged$/, @flags)) {
-				next;
-			}
-			#
-			# This action mark message as seen, but we'll
-			# deny seeing later.
-			#
-			my $msg = $imap->message_string($msg_idx, 1);
-			$msg =~ s/\r\n/\n/g;
-			# Extract address of a sender.
-			$msg =~ /^From: *(.*)/m;
-			my $from_addr = $1;
-			# Do _not_ modify the string inside `$config'.
-			(my $ntf_cfg = $config{notifier}) =~ (
-			    s/\{FROM\}/$from_addr/g
-			);
-			#
-			# Mark message as ``UNSEEN'' back, so that our
-			# email client can display it properly.
-			#
-			$imap->deny_seeing($msg_idx);
-			#
-			# Say that we've shown a notification for this
-			# message.
-			#
-			$imap->set_flag("Flagged", $msg_idx);
-			# Call a notifier.
-			$from_addr and system $ntf_cfg;
-		}
-	}
-	# Wait a while until next revision.
-	sleep $config{interval};
-}
+while True:
+    check_and_notify()
+    try:
+        time.sleep(int(get_var('interval')))
+    except:
+        sys.exit(0)
