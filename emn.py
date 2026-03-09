@@ -22,6 +22,7 @@
 #
 
 from email.header import decode_header, make_header
+from functools import reduce
 import email
 import imaplib
 import os
@@ -118,8 +119,7 @@ def check_and_notify():
             except:
                 exit(0)
     status, data = mail.search(None, 'UNFLAGGED')
-    mail_ids = []
-    for block in data: mail_ids += block.split()
+    mail_ids = reduce(lambda acc, block: acc + block.split(), data, [])
     for mail_id in mail_ids:
         status, data = mail.fetch(mail_id, 'BODY[HEADER.FIELDS(FROM)]')
         for response_part in data:
