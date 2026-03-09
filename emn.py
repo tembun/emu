@@ -105,6 +105,18 @@ def process_config():
         data['value'] = var_val
 
 def check_and_notify():
+    while True:
+        try:
+            mail.noop()
+            break
+        except:
+            DELAY = 5
+            warn(f"Can not connect to the server: {get_var('server')}."
+                 f' Retry after {DELAY} seconds')
+            try:
+                time.sleep(DELAY)
+            except:
+                exit(0)
     status, data = mail.search(None, 'UNFLAGGED')
     mail_ids = []
     for block in data: mail_ids += block.split()
