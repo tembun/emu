@@ -121,7 +121,7 @@ def check_and_notify():
     status, data = mail.search(None, 'UNFLAGGED')
     mail_ids = reduce(lambda acc, block: acc + block.split(), data, [])
     for mail_id in mail_ids:
-        status, data = mail.fetch(mail_id, 'BODY[HEADER.FIELDS(FROM)]')
+        status, data = mail.fetch(mail_id, 'BODY[HEADER]')
         for response_part in data:
             if isinstance(response_part, tuple):
                 message = email.message_from_bytes(response_part[1])
