@@ -94,7 +94,7 @@ def process_config():
             lines = [l for l in lines if l]
     except:
         err(f"Pass-config file not found: {get_var('pass')}")
-    vars = [l.split(' ') for l in lines]
+    vars = [l.split(' ', 1) for l in lines]
     vars = {a[0]: a[1] for a in vars }
     for prop in config:
         data = config[prop]
