@@ -3,8 +3,9 @@
 #
 # emn -- email notifier.
 #
-# The main configuration file for the program is $HOME/.emnrc, which
-# should define the following variables, using the syntax:
+# The main configuration file for the program is $HOME/.emnrc (it can be
+# overriden by the first optional argument), which should define the
+# following variables, using the syntax:
 #   "%s = %s", variable_name, variable_value
 # pass      A filepath to the private configuration file (see below).
 # notifier  A command that will be used for sending notification.
@@ -30,7 +31,11 @@ import sys
 import time
 
 HOME = os.getenv('HOME')
-CONFIG_PATH = f"{HOME or '.'}/.emnrc"
+# First argument may specify a path to an alternate configuration file.
+if (len(sys.argv) == 2):
+    config_path = sys.argv[1]
+else:
+    config_path = f"{HOME or '.'}/.emnrc"
 progname = os.path.basename(sys.argv[0]).removesuffix('.py')
 
 config = {
@@ -70,11 +75,11 @@ def get_var(var):
 
 def process_config():
     try:
-        with open(CONFIG_PATH, 'r') as f:
+        with open(config_path, 'r') as f:
             lines = f.read().split('\n')
             lines = [l for l in lines if l]
     except:
-        err(f'Config file not found: {CONFIG_PATH}')
+        err(f'Config file not found: {config_path}')
     vars = [l.split(' = ') for l in lines]
     vars = { a[0]: a[1] for a in vars }
     for prop in config:
