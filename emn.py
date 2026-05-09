@@ -62,7 +62,7 @@ def warn(*args, **kwargs):
     print('%s: %s' % (progname, *args), file=sys.stderr, **kwargs)
 
 def err(*args, **kwargs):
-    warn(*args, **kwars)
+    warn(*args, **kwargs)
     sys.exit(1)
 
 def get_var(var):
